@@ -1,0 +1,15 @@
+services:
+  dysmn-notifier:
+    build: .
+    container_name: dysmn-notifier
+    restart: unless-stopped
+    working_dir: /app
+
+    environment:
+      - SPOTIFY_CLIENT_ID=${CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${CLIENT_SECRET}
+      - SPOTIFY_ARTIST_ID=${ARTIST_ID}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+
+    volumes:
+      - ./last_check.txt:/app/last_check.txt
