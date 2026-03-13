@@ -12,4 +12,4 @@ services:
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
 
     volumes:
-      - ./last_check.txt:/app/last_check.txt
+      - ./known_album_ids.txt:/app/known_album_ids.txt

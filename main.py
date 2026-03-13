@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+#!/usr/bin/env python3
 
 import os
 import requests
@@ -8,7 +9,7 @@ CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
 ARTIST_ID = os.getenv("SPOTIFY_ARTIST_ID", "")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
-LAST_CHECK_FILE = "last_check.txt"
+KNOWN_IDS_FILE = "known_album_ids.txt"
 
 
 def get_access_token(client_id, client_secret):
@@ -22,11 +23,11 @@ def get_access_token(client_id, client_secret):
 
 
 def get_all_artist_albums(artist_id, token):
-    """Fetch ALL albums (including singles, compilations, etc.) with pagination."""
+    """Fetch ALL albums (singles, albums, compilations, appears_on)."""
     url = f"https://api.spotify.com/v1/artists/{artist_id}/albums"
     params = {
         "include_groups": "single,album,appears_on,compilation",
-        "limit": 50,  # Max per page
+        "limit": 50,
     }
     headers = {"Authorization": f"Bearer {token}"}
     albums = []
@@ -35,93 +36,65 @@ def get_all_artist_albums(artist_id, token):
         resp.raise_for_status()
         data = resp.json()
         albums.extend(data["items"])
-        url = data.get("next")  # Next page URL (includes all parameters)
-        params = None  # Params already in the next URL
+        url = data.get("next")
+        params = None
     return albums
 
 
-def load_last_check_time():
-    try:
-        with open(LAST_CHECK_FILE, "r") as f:
-            ts = f.read().strip()
-            return datetime.fromisoformat(ts)
-    except FileNotFoundError:
-        # First run: use a very old date so everything is considered "new"
-        return datetime(2000, 1, 1, tzinfo=timezone.utc)
+def load_known_ids():
+    """Return a set of album IDs that have already been seen.
+    Returns None if the file does not exist (first run)."""
+    if not os.path.exists(KNOWN_IDS_FILE):
+        return None
+    with open(KNOWN_IDS_FILE, "r") as f:
+        return {line.strip() for line in f if line.strip()}
 
 
-def save_last_check_time(dt):
-    with open(LAST_CHECK_FILE, "w") as f:
-        f.write(dt.isoformat())
+def save_known_ids(albums):
+    """Overwrite known IDs file with the IDs of all given albums."""
+    with open(KNOWN_IDS_FILE, "w") as f:
+        for album in albums:
+            f.write(album["id"] + "\n")
 
 
 def send_discord_notification(webhook_url, new_releases):
-    """Send a Discord message with the list of new releases."""
     message = "**New releases found!**\n"
     for a in new_releases:
-        # Format: - Album name (album_type) – release_date (Spotify link)
         message += f"- [{a['name']}]({a['external_urls']['spotify']}) ({a['album_type']}) – {a['release_date']}\n"
-
-    payload = {"content": message}
-    requests.post(webhook_url, json=payload)
+    requests.post(webhook_url, json={"content": message})
 
 
 def main():
-    if (
-        CLIENT_ID == "your_spotify_client_id"
-        or CLIENT_SECRET == "your_spotify_client_secret"
-    ):
-        raise SystemExit(
-            "Please set your Spotify client ID and secret in the script or as environment variables."
-        )
-
     token = get_access_token(CLIENT_ID, CLIENT_SECRET)
     albums = get_all_artist_albums(ARTIST_ID, token)
-
     print(f"Total releases fetched: {len(albums)}")
 
-    # Sort by release date (newest first)
     albums_sorted = sorted(albums, key=lambda a: a["release_date"], reverse=True)
-
-    # Print the latest 10 releases in the terminal
     print("\nLatest 10 releases (any type):")
     for a in albums_sorted[:10]:
-        print(
-            f"- {a['name']} ({a['album_type']}) – {a['release_date']} "
-            f"{a['external_urls']['spotify']}"
-        )
+        print(f"- {a['name']} ({a['album_type']}) – {a['release_date']} {a['external_urls']['spotify']}")
 
-    # Check for new releases since last run
-    last_check = load_last_check_time()
-    now = datetime.now(timezone.utc)
+    known_ids = load_known_ids()
 
-    new_releases = []
-    for album in albums:
-        # Convert release_date to datetime
-        rd = album["release_date"]
-        precision = album["release_date_precision"]
-        if precision == "year":
-            rd += "-01-01"
-        elif precision == "month":
-            rd += "-01"
-        release_dt = datetime.fromisoformat(rd).replace(tzinfo=timezone.utc)
+    if known_ids is None:
+        save_known_ids(albums)
+        print("\nNo previous known IDs found. Initialised known_album_ids.txt with current releases.")
+        print("No notifications sent this time – future runs will detect new releases.")
+        return
 
-        if release_dt > last_check:
-            new_releases.append(album)
+    new_releases = [a for a in albums if a["id"] not in known_ids]
 
-    # If there are new releases, send a Discord notification
     if new_releases:
-        print(f"\n✅ {len(new_releases)} new release(s) found since {last_check}!")
-        if DISCORD_WEBHOOK_URL and DISCORD_WEBHOOK_URL != "your_discord_webhook_url":
+        print(f"\n✅ {len(new_releases)} new release(s) detected!")
+        if DISCORD_WEBHOOK_URL:
             send_discord_notification(DISCORD_WEBHOOK_URL, new_releases)
             print("Discord notification sent.")
         else:
             print("Discord webhook not configured – skipping notification.")
     else:
-        print(f"\nNo new releases since {last_check}.")
+        print(f"\nNo new releases – total known IDs: {len(known_ids)}.")
 
-    # Update the last check time
-    save_last_check_time(now)
+    save_known_ids(albums)
 
 
 if __name__ == "__main__":
