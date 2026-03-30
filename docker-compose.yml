@@ -1,15 +1,76 @@
 services:
+  gluetun-dysmn:
+    image: ghcr.io/qdm12/gluetun:latest
+    container_name: gluetun-dysmn
+    restart: unless-stopped
+
+    cap_add:
+      - NET_ADMIN
+
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_MTU=1500
+      - SERVER_COUNTRIES=${SERVER_COUNTRIES}
+      - SERVER_CITIES=${SERVER_CITIES}
+      - TZ=Pacific/Auckland
+
+    volumes:
+      - ./gluetun-config:/gluetun
+
+    ports:
+      - 7778:7778
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://google.com"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    networks:
+      dysmn:
+        ipv4_address: 10.44.44.2
+        ipv6_address: fdf8:b328:e087:63b1::2
+
   dysmn-notifier:
     build: .
     container_name: dysmn-notifier
     restart: unless-stopped
     working_dir: /app
 
+    network_mode: "service:gluetun-dysmn"
+
+    depends_on:
+      gluetun-dysmn:
+        condition: service_started
+
     environment:
       - SPOTIFY_CLIENT_ID=${CLIENT_ID}
       - SPOTIFY_CLIENT_SECRET=${CLIENT_SECRET}
       - SPOTIFY_ARTIST_ID=${ARTIST_ID}
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - TZ=Pacific/Auckland
+      - PUID=1000
+      - PGID=1000
 
     volumes:
       - ./known_album_ids.txt:/app/known_album_ids.txt
+
+networks:
+  dysmn:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.44.44.0/24
+        - subnet: fdf8:b328:e087:63b1::/64

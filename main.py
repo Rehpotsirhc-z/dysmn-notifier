@@ -4,6 +4,7 @@
 import os
 import requests
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
@@ -65,6 +66,14 @@ def send_discord_notification(webhook_url, new_releases):
 
 
 def main():
+    utc_time = datetime.now(timezone.utc)
+    ny_time = utc_time.astimezone(ZoneInfo("America/New_York"))
+    nz_time = utc_time.astimezone(ZoneInfo("Pacific/Auckland"))
+
+    print(f"Current time (UTC): {utc_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    print(f"Current time (America/New_York): {ny_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    print(f"Current time (Pacific/Auckland): {nz_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+
     token = get_access_token(CLIENT_ID, CLIENT_SECRET)
     albums = get_all_artist_albums(ARTIST_ID, token)
     print(f"Total releases fetched: {len(albums)}")
