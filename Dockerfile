@@ -9,7 +9,7 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir requests python-dotenv
+RUN pip install --no-cache-dir requests
 
 COPY main.py /app/main.py
 

@@ -54,8 +54,6 @@ services:
         condition: service_started
 
     environment:
-      - SPOTIFY_CLIENT_ID=${CLIENT_ID}
-      - SPOTIFY_CLIENT_SECRET=${CLIENT_SECRET}
       - SPOTIFY_ARTIST_ID=${ARTIST_ID}
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
       - TZ=Pacific/Auckland

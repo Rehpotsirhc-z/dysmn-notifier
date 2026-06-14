@@ -1,3 +1,4 @@
 .env
 known_album_ids.txt
 gluetun-config
+/__pycache__/
